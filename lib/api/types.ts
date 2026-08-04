@@ -42,6 +42,11 @@ export interface GeneratePlanRequest {
    */
   icuApiKey?: string;
   /**
+   * Intervals.icu OAuth Bearer token (preferred over apiKey when available).
+   * Set by the OAuth login flow; takes precedence over icuApiKey.
+   */
+  icuToken?: string;
+  /**
    * Intervals.icu athlete ID (e.g. "i12345").
    * Defaults to athleteId if omitted.
    */

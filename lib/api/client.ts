@@ -42,11 +42,17 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   try {
     json = JSON.parse(text) as T;
   } catch {
-    // API routes not available in web SPA mode — return empty rather than crash
+    // Only throw WEB_MODE when the response looks like an HTML page served by
+    // the Expo web dev server (i.e. the API route doesn't exist on this host).
+    // For real HTTP errors (504, 502, etc.) we want a proper error, not a
+    // silent "Web preview only" that hides the failure from the user.
+    if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
+      throw new ApiClientError('API not available in web mode', 'WEB_MODE', 0);
+    }
     throw new ApiClientError(
-      'API not available in web mode',
-      'WEB_MODE',
-      0
+      `Server error (HTTP ${res.status}) — response was not JSON`,
+      'SERVER_ERROR',
+      res.status
     );
   }
   if (!res.ok) {
@@ -163,6 +169,7 @@ export async function generatePlan(opts: {
   phaseOverride?: TrainingPhase;
   availableDays?: string[];
   icuApiKey?: string;
+  icuToken?: string;
   icuAthleteId?: string;
 }): Promise<GeneratePlanResponse> {
   const body: GeneratePlanRequest = {
@@ -172,6 +179,7 @@ export async function generatePlan(opts: {
     phaseOverride: opts.phaseOverride,
     availableDays: opts.availableDays,
     icuApiKey:    opts.icuApiKey,
+    icuToken:     opts.icuToken,
     icuAthleteId: opts.icuAthleteId,
   };
   return apiFetch<GeneratePlanResponse>('/api/plan/generate', {

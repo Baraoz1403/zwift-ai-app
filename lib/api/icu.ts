@@ -65,7 +65,8 @@ export interface ICUFitnessData {
 }
 
 export interface PushWorkoutOptions {
-  apiKey: string;
+  apiKey?: string;
+  token?: string;   // OAuth Bearer token — preferred over apiKey
   athleteId?: string;
   date: string;          // YYYY-MM-DD
   title: string;
@@ -201,7 +202,7 @@ export async function pushWorkout(opts: PushWorkoutOptions): Promise<PushWorkout
     const res = await fetch(`${INTERVALS_API}/athlete/${opts.athleteId ?? 'me'}/events`, {
       method: 'POST',
       headers: {
-        Authorization: basicAuth(opts.apiKey),
+        Authorization: opts.token ? bearerAuth(opts.token) : basicAuth(opts.apiKey ?? ''),
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },

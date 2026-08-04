@@ -130,18 +130,21 @@ export async function POST(request: Request): Promise<Response> {
 
   // ── 2. ICU credentials ──────────────────────────────────────────────────────
 
+  const icuToken  = body.icuToken  ?? '';
   const icuApiKey = body.icuApiKey ?? (process.env.ICU_API_KEY ?? '');
   const icuAthleteId = body.icuAthleteId ?? body.athleteId;
+  // Use whichever credential is available — token takes precedence
+  const icuCreds = icuToken ? { token: icuToken } : icuApiKey ? icuApiKey : null;
 
   // ── 3. Training load ────────────────────────────────────────────────────────
 
   let load: TrainingLoadSummary;
 
-  if (icuApiKey) {
+  if (icuCreds) {
     // Fetch fitness metrics and recent activities in parallel
     const [fitness, recentActivities] = await Promise.all([
-      fetchFitness(icuApiKey, icuAthleteId),
-      fetchRecentActivities(icuApiKey, icuAthleteId, 14),
+      fetchFitness(icuCreds, icuAthleteId),
+      fetchRecentActivities(icuCreds, icuAthleteId, 14),
     ]);
 
     const ctl = fitness?.ctl ?? 0;
@@ -216,7 +219,7 @@ export async function POST(request: Request): Promise<Response> {
 
   // ── 5. Upload training days to ICU calendar ─────────────────────────────────
 
-  if (icuApiKey) {
+  if (icuCreds) {
     const trainingDays = (result.plan.workouts as DayWorkoutExtended[]).filter(
       w => w.dayType === 'training'
     );
@@ -243,7 +246,7 @@ export async function POST(request: Request): Promise<Response> {
         const zwoXml = generateZwoXml(zwoInput, zwoBlocks, 'Zwift AI Coach');
 
         return pushWorkout({
-          apiKey: icuApiKey,
+          ...(typeof icuCreds === 'string' ? { apiKey: icuCreds } : icuCreds),
           athleteId: icuAthleteId,
           date: dayDate(body.weekOf, w.day),
           title: w.workoutName ?? 'Training',

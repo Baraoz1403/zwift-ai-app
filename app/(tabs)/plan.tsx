@@ -133,6 +133,7 @@ export default function PlanScreen() {
         weekOf,
         profile,
         icuApiKey: icuCreds?.apiKey,
+        icuToken: icuCreds?.token,
         icuAthleteId: icuCreds?.athleteId,
       });
 
