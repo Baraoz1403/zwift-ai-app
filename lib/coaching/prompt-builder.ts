@@ -18,6 +18,7 @@ import {
   PROGRESSION_LADDER,
   SESSION_PREREQUISITES,
   RIDER_LEVEL_THRESHOLDS,
+  WORKOUT_LIBRARY,
 } from '../knowledge/coaching-knowledge';
 
 import {
@@ -148,6 +149,95 @@ function describeTSSTarget(load: TrainingLoadSummary, phase: TrainingPhase): str
   return `Target weekly TSS: ${target.min}–${target.max} (based on CTL ${load.ctl})`;
 }
 
+/**
+ * Determine the minimum-intensity floor for hard sessions this week.
+ * Returns explicit workout names the AI MUST use as the baseline — not the ceiling.
+ *
+ * Design: the progression ladder is meaningless without knowing where the
+ * athlete currently sits. This function computes that position from W/kg +
+ * TSB so that Claude never defaults to Foundation Ride for an advanced rider.
+ */
+function describeIntensityFloor(wkg: number | null, tsb: number, phase: TrainingPhase): string {
+  // Default if no power data
+  if (wkg === null || wkg === 0) {
+    return 'Intensity floor: Foundation Ride + Tempo Cruise (no FTP/weight data — use conservative baseline).';
+  }
+
+  const lines: string[] = [];
+
+  // Determine the highest-intensity category available at this TSB
+  const canVo2max    = tsb >= SESSION_PREREQUISITES.vo2max.minTsb;
+  const canThreshold = tsb >= SESSION_PREREQUISITES.threshold.minTsb;
+  const canSweetspot = tsb >= SESSION_PREREQUISITES.sweetspot.minTsb;
+
+  if (wkg >= 4.0) {
+    // Advanced / Elite
+    lines.push(`Rider level: Advanced/Elite (${wkg.toFixed(1)} W/kg). Full workout library is available.`);
+    if (canVo2max && phase === 'build') {
+      lines.push('Hard session floor: Norwegian 4×4, Seiler 4×8, 5×5 VO2max, or 2×20 FTP Blocks.');
+      lines.push('Supporting sessions: Extended Sweet Spot, Over-Under Intervals, Descending Threshold.');
+    } else if (canThreshold) {
+      lines.push('Hard session floor: 2×20 FTP Blocks, Over-Under Intervals, or Descending Threshold.');
+      lines.push('Supporting sessions: Extended Sweet Spot or 3×15 Sweet Spot.');
+    } else if (canSweetspot) {
+      lines.push('Hard session floor: Extended Sweet Spot or Sweet Spot Progression.');
+    }
+  } else if (wkg >= 3.5) {
+    // Trained
+    lines.push(`Rider level: Trained (${wkg.toFixed(1)} W/kg). Norwegian 4×4, 2×20 FTP Blocks, Over-Under Intervals are all appropriate.`);
+    if (canVo2max && phase === 'build') {
+      lines.push('Hard session floor: Norwegian 4×4 or 3-Minute VO2max Repeats.');
+      lines.push('Supporting sessions: 3×15 Sweet Spot, Threshold Development, or Over-Under Intervals.');
+    } else if (canThreshold) {
+      lines.push('Hard session floor: Threshold Development or 3×15 Sweet Spot.');
+    } else if (canSweetspot) {
+      lines.push('Hard session floor: 3×15 Sweet Spot or Extended Sweet Spot.');
+    }
+  } else if (wkg >= 3.0) {
+    // Intermediate
+    lines.push(`Rider level: Intermediate (${wkg.toFixed(1)} W/kg). Sweet Spot and Threshold Development are the primary tools.`);
+    if (canVo2max && phase === 'build') {
+      lines.push('Hard session floor: 4×4 Two-Set or Micro Intervals.');
+      lines.push('Supporting sessions: 3×15 Sweet Spot or Threshold Development.');
+    } else if (canThreshold) {
+      lines.push('Hard session floor: Threshold Development or Sweet Spot Classic.');
+    } else if (canSweetspot) {
+      lines.push('Hard session floor: Sweet Spot Classic or 3×15 Sweet Spot.');
+    }
+  } else if (wkg >= 2.5) {
+    // Novice
+    lines.push(`Rider level: Novice (${wkg.toFixed(1)} W/kg). Sweet Spot Classic is the primary intensity session.`);
+    if (canSweetspot) {
+      lines.push('Hard session floor: Sweet Spot Classic.');
+    } else {
+      lines.push('Hard session floor: Tempo Cruise (TSB too low for Sweet Spot).');
+    }
+  } else {
+    // Beginner
+    lines.push(`Rider level: Beginner (${wkg.toFixed(1)} W/kg). Endurance + Tempo only.`);
+    lines.push('Hard session floor: Tempo Cruise.');
+  }
+
+  lines.push('');
+  lines.push('⚠️ Do NOT go below this floor. Foundation Ride is for rest/recovery days and Z2 bookends only — never as a "hard" session for this athlete.');
+
+  // List the library workouts that are TOO EASY and must not be used as primary sessions
+  const tooEasyNames = WORKOUT_LIBRARY
+    .filter(w => {
+      if (wkg >= 3.5 && ['sweetspot', 'tempo'].includes(w.category)) return false; // These are fine supporting sessions
+      if (wkg >= 3.0 && w.category === 'recovery') return true;
+      if (wkg >= 3.5 && w.category === 'endurance' && w.name !== 'Long Endurance' && w.name !== 'Two-Hour Foundation') return true;
+      return false;
+    })
+    .map(w => w.name);
+
+  if (tooEasyNames.length > 0) {
+    lines.push(`Sessions that must NOT be used as primary intensity this week: ${tooEasyNames.join(', ')}.`);
+  }
+
+  return lines.join('\n');
+}
+
 function describeSessionReadiness(tsb: number): string {
   const lines: string[] = ['Session readiness from current TSB:'];
   for (const [category, prereq] of Object.entries(SESSION_PREREQUISITES)) {
@@ -272,9 +362,9 @@ export function buildPrompt(ctx: PromptContext): BuiltPrompt {
     '# Workout Library',
     WORKOUT_LIBRARY_PROMPT,
     '',
-    '# Progression Ladder',
-    'Never skip rungs. Advance one rung at a time:',
-    PROGRESSION_LADDER.join(' → '),
+    '# Progression Reference (for context only)',
+    'Easiest → Hardest: ' + PROGRESSION_LADDER.join(' → '),
+    'Use this to understand relative difficulty. The athlete\'s INTENSITY FLOOR (in the user prompt) tells you the MINIMUM starting point — never go below it.',
     '',
     QUALITY_GATE_EXPLANATION,
     '',
@@ -303,7 +393,10 @@ export function buildPrompt(ctx: PromptContext): BuiltPrompt {
     describePhase(phase),
     describeTSSTarget(load, phase),
     '',
-    '## Session Readiness',
+    '## Intensity Floor (minimum — do not go below this)',
+    describeIntensityFloor(wkg, load.tsb, phase),
+    '',
+    '## Session Readiness by TSB',
     describeSessionReadiness(load.tsb),
     '',
     '## Schedule',
