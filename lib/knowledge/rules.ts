@@ -8,8 +8,12 @@
 /** Every training day workout must contain these block types, in order */
 export const REQUIRED_WORKOUT_STRUCTURE = ['warmup', 'intervals', 'cooldown'] as const;
 
-/** Minimum number of interval blocks in a training day workout */
-export const MIN_INTERVAL_BLOCKS = 3;
+/**
+ * Minimum number of "intervals"-typed blocks in a training day workout.
+ * 1 = at least one hard block (warmup + THIS + cooldown is the minimum structure).
+ * The quality gate also requires total blocks ≥ 3 (warmup + intervals + cooldown).
+ */
+export const MIN_INTERVAL_BLOCKS = 1;
 
 /** Workout name patterns that are forbidden on training days */
 export const FORBIDDEN_WORKOUT_PATTERNS = [

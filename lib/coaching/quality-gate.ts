@@ -55,8 +55,8 @@ function checkTrainingDayStructure(workout: DayWorkout): QualityFailure[] {
   if (workout.dayType !== 'training') return failures;
 
   const blocks = workout.blocks ?? [];
+  // Require at least 1 block of type 'intervals' (the hard effort)
   const intervalBlocks = blocks.filter(b => b.type === 'intervals');
-
   if (intervalBlocks.length < MIN_INTERVAL_BLOCKS) {
     failures.push('trainingDayWithoutIntervals');
   }
@@ -126,11 +126,8 @@ export function validatePlan(
     details.push(QUALITY_GATE_FAILURES[f]);
   }
 
-  const tssFailures = checkWeeklyTSS(plan, context.ctl, context.phase);
-  for (const f of tssFailures) {
-    failures.push(f);
-    details.push(QUALITY_GATE_FAILURES[f]);
-  }
+  // TSS range check removed — the formula (ctl × 7 × multiplier) assumes daily
+  // training and rejects realistic 4-day plans. TSS guidance stays in the prompt.
 
   return {
     passed: failures.length === 0,

@@ -280,11 +280,10 @@ function describeFeedback(feedback?: WeekFeedback): string {
 
 const QUALITY_GATE_EXPLANATION = `
 QUALITY GATE (your output will be rejected if any of these fail):
-1. Every TRAINING day must have ≥${MIN_INTERVAL_BLOCKS} interval blocks (warmup + intervals + cooldown).
+1. Every TRAINING day must have ≥1 block of type "intervals" (warmup + intervals + cooldown is the minimum structure).
 2. Forbidden workout names on training days: ${FORBIDDEN_WORKOUT_PATTERNS.join(', ')}.
 3. No more than ${MAX_CONSECUTIVE_TRAINING_DAYS} consecutive training days without a rest/recovery day.
-4. Weekly TSS must be within the stated target range.
-5. Day type rules:
+4. Day type rules:
    - training: ${DAY_TYPE_RULES.training}
    - recovery: ${DAY_TYPE_RULES.recovery}
    - rest: ${DAY_TYPE_RULES.rest}
